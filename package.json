@@ -2,7 +2,7 @@
   "name": "jadwal-shift",
   "private": true,
   "version": "0.0.0",
-  "homepage": "https://mdenniandrian.github.io/jadwal-shift",
+  "homepage": "https://mdenniandrian.github.io/attendance",
   "type": "module",
   "scripts": {
     "dev": "vite",
