@@ -5,11 +5,13 @@ import {
   Calendar as CalendarIcon, 
   ShieldCheck, 
   Lock, 
-  RefreshCw
+  RefreshCw,
+  Info,
+  CalendarDays
 } from 'lucide-react';
 
 const App = () => {
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 4, 1)); // Mei 2026
+  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 4, 1)); // Default Mei 2026
   const [today] = useState(new Date());
 
   // Data Karyawan
@@ -21,13 +23,38 @@ const App = () => {
     { id: 4, name: 'Member', avatar: 'bg-rose-500' },
   ];
 
-  // Konfigurasi Shift Sesuai Permintaan (A: Pagi 1, B: Pagi 2, C: Siang, D: Malam, L: Libur)
+  // Konfigurasi Shift (A: Hijau, B: Biru, C: Kuning, D: Malam, L: Merah)
   const shiftTypes = {
     'A': { label: 'Pagi 1', time: '06.00 - 15.00', bg: 'bg-emerald-100 text-emerald-800', border: 'border-emerald-300' },
     'B': { label: 'Pagi 2', time: '09.00 - 18.00', bg: 'bg-blue-100 text-blue-800', border: 'border-blue-300' },
     'C': { label: 'Siang', time: '14.00 - 23.00', bg: 'bg-yellow-100 text-yellow-800', border: 'border-yellow-300' },
     'D': { label: 'Malam', time: '22.00 - 07.00', bg: 'bg-slate-800 text-slate-100', border: 'border-slate-700' },
     'L': { label: 'Libur', time: 'OFF DAY', bg: 'bg-red-100 text-red-700', border: 'border-red-300 border-dashed' },
+  };
+
+  // Database Hari Libur Nasional & Cuti Bersama 2026
+  const holidays2026 = {
+    "2026-01-01": { name: "Tahun Baru 2026 Masehi", type: "nasional" },
+    "2026-01-20": { name: "Tahun Baru Imlek 2577 Kongzili", type: "nasional" },
+    "2026-02-15": { name: "Isra Mikraj Nabi Muhammad SAW", type: "nasional" },
+    "2026-03-20": { name: "Nyepi & Idul Fitri 1447 H", type: "nasional" },
+    "2026-03-21": { name: "Hari Raya Idul Fitri 1447 H", type: "nasional" },
+    "2026-03-23": { name: "Cuti Bersama Idul Fitri", type: "cuti" },
+    "2026-03-24": { name: "Cuti Bersama Idul Fitri", type: "cuti" },
+    "2026-03-25": { name: "Cuti Bersama Idul Fitri", type: "cuti" },
+    "2026-03-26": { name: "Cuti Bersama Idul Fitri", type: "cuti" },
+    "2026-04-03": { name: "Wafat Yesus Kristus", type: "nasional" },
+    "2026-04-05": { name: "Hari Paskah", type: "nasional" },
+    "2026-05-01": { name: "Hari Buruh Internasional", type: "nasional" },
+    "2026-05-14": { name: "Kenaikan Yesus Kristus", type: "nasional" },
+    "2026-05-27": { name: "Hari Raya Waisak 2570 BE", type: "nasional" },
+    "2026-06-01": { name: "Hari Lahir Pancasila", type: "nasional" },
+    "2026-06-06": { name: "Hari Raya Idul Adha 1447 H", type: "nasional" },
+    "2026-06-27": { name: "Tahun Baru Islam 1448 H", type: "nasional" },
+    "2026-08-17": { name: "Hari Kemerdekaan RI", type: "nasional" },
+    "2026-09-05": { name: "Maulid Nabi Muhammad SAW", type: "nasional" },
+    "2026-12-25": { name: "Hari Raya Natal", type: "nasional" },
+    "2026-12-26": { name: "Cuti Bersama Natal", type: "cuti" },
   };
 
   const mod = (n, m) => ((n % m) + m) % m;
@@ -42,15 +69,13 @@ const App = () => {
   const getEmployeeSchedule = (empId, date) => {
     const diffDays = getDaysDiff(date, anchorDate);
     const weekIdx = Math.floor(diffDays / 7);
-    const mappedDay = mod(date.getDay() - 1, 7); // 0=Sen, 1=Sel, 2=Rab, dst.
+    const mappedDay = mod(date.getDay() - 1, 7); 
 
-    // Libur bergilir: Rabu s/d Minggu
     const currentOffDayIndex = mod(empId + weekIdx, 5);
     const offDayMapped = [2, 3, 4, 5, 6][currentOffDayIndex]; 
 
     if (mappedDay === offDayMapped) return 'L';
 
-    // Logika konsistensi 6 hari: Shift hanya berubah setelah melewati hari libur minggu ini
     let lastOffWeek = weekIdx;
     if (mappedDay < offDayMapped) lastOffWeek -= 1;
 
@@ -60,18 +85,30 @@ const App = () => {
     return shiftMap[lastOffDayIndex];
   };
 
-  const calendarDays = useMemo(() => {
+  // Mengelompokkan tanggal ke dalam minggu (arrays of 7)
+  const calendarWeeks = useMemo(() => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
     const days = [];
-    // Sesuaikan agar Senin jadi kolom pertama
     const emptyDays = firstDay === 0 ? 6 : firstDay - 1;
     for (let i = 0; i < emptyDays; i++) days.push(null);
     for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
-    return days;
+    
+    // Pecah jadi baris per 7 hari
+    const weeks = [];
+    for (let i = 0; i < days.length; i += 7) {
+      weeks.push(days.slice(i, i + 7));
+    }
+    return weeks;
   }, [currentMonth]);
+
+  const getFormattedDateKey = (date) => {
+    if (!date) return null;
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800">
@@ -84,9 +121,9 @@ const App = () => {
               <CalendarIcon size={28} />
             </div>
             <div>
-              <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Jadwal Shift Karyawan</h1>
+              <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Jadwal Shift & Libur 2026</h1>
               <div className="flex items-center gap-2 mt-1 text-slate-500 text-xs font-medium uppercase tracking-wider">
-                <RefreshCw size={14} className="text-emerald-500" /> Rotasi Otomatis Aktif
+                <RefreshCw size={14} className="text-emerald-500" /> Rotasi Otomatis & Keterangan Mingguan
               </div>
             </div>
           </div>
@@ -111,64 +148,113 @@ const App = () => {
           ))}
         </div>
 
-        {/* Calendar Grid */}
+        {/* Calendar Grid Container */}
         <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm">
+          {/* Hari Header */}
           <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-[10px] md:text-xs uppercase tracking-wider py-4 text-center">
-            {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'].map((d, index) => (
-              <div key={d} className={index === 6 ? 'text-red-500' : ''}>{d.slice(0,3)}</div>
+            {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((d, index) => (
+              <div key={d} className={index === 6 ? 'text-red-500' : ''}>{d}</div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 bg-white">
-            {calendarDays.map((date, idx) => {
-              const isToday = date && date.toDateString() === today.toDateString();
-              
+          {/* Render Week by Week */}
+          <div className="bg-white">
+            {calendarWeeks.map((week, weekIdx) => {
+              // Cari semua hari libur dalam minggu ini
+              const weekHolidays = week
+                .map(date => {
+                  const key = getFormattedDateKey(date);
+                  return key ? { date: date.getDate(), ...holidays2026[key] } : null;
+                })
+                .filter(h => h && h.name);
+
               return (
-                <div key={idx} className={`min-h-[150px] md:min-h-[190px] border-b border-r border-slate-100 p-1.5 md:p-2.5 transition-all ${!date ? 'bg-slate-50/50' : 'hover:bg-slate-50/30'} ${isToday ? 'bg-blue-50/40' : ''}`}>
-                  {date && (
-                    <div className="h-full flex flex-col">
-                      <div className="flex justify-between items-start mb-3">
-                        <span className={`text-xs font-bold w-7 h-7 flex items-center justify-center rounded-lg ${isToday ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-600 bg-slate-100'}`}>
-                          {date.getDate()}
-                        </span>
-                      </div>
+                <React.Fragment key={weekIdx}>
+                  {/* Baris Tanggal & Jadwal */}
+                  <div className="grid grid-cols-7">
+                    {week.map((date, dayIdx) => {
+                      const dateStr = getFormattedDateKey(date);
+                      const holiday = dateStr ? holidays2026[dateStr] : null;
+                      const isToday = date && date.toDateString() === today.toDateString();
+                      const isSunday = dayIdx === 6; // Minggu selalu kolom ke-7
                       
-                      <div className="space-y-1.5 flex-1">
-                        {employees.map(emp => {
-                          const shift = getEmployeeSchedule(emp.id, date); 
-                          const sData = shiftTypes[shift];
-                          const isLibur = shift === 'L';
-                          
-                          return (
-                            <div key={emp.id} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border ${sData.bg} ${sData.border} ${isLibur ? 'opacity-60' : ''}`}>
-                              <span className="text-[10px] md:text-xs font-semibold tracking-tight">{emp.name.split(' ')[0]}</span>
-                              <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wide">{shift}</span>
+                      return (
+                        <div key={dayIdx} className={`min-h-[160px] md:min-h-[210px] border-b border-r border-slate-100 p-1.5 md:p-2.5 transition-all ${!date ? 'bg-slate-50/50' : 'hover:bg-slate-50/30'} ${isToday ? 'bg-blue-50/40' : ''}`}>
+                          {date && (
+                            <div className="h-full flex flex-col">
+                              <div className="flex justify-between items-start mb-3">
+                                <span className={`text-xs font-bold w-7 h-7 flex items-center justify-center rounded-lg ${
+                                  holiday?.type === 'nasional' || isSunday ? 'bg-red-500 text-white shadow-md shadow-red-100' : 
+                                  holiday?.type === 'cuti' ? 'bg-rose-100 text-rose-600' :
+                                  isToday ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 
+                                  'text-slate-600 bg-slate-100'
+                                }`}>
+                                  {date.getDate()}
+                                </span>
+                              </div>
+                              
+                              <div className="space-y-1.5 flex-1">
+                                {employees.map(emp => {
+                                  const shift = getEmployeeSchedule(emp.id, date); 
+                                  const sData = shiftTypes[shift];
+                                  const isLibur = shift === 'L';
+                                  
+                                  return (
+                                    <div key={emp.id} className={`flex items-center justify-between px-2 py-1 rounded-md border ${sData.bg} ${sData.border} ${isLibur ? 'opacity-50' : ''}`}>
+                                      <span className="text-[9px] md:text-[10px] font-semibold tracking-tight">{emp.name.split(' ')[0]}</span>
+                                      <span className="text-[9px] md:text-[10px] font-black uppercase tracking-wide">{shift}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             </div>
-                          )
-                        })}
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Baris Keterangan Tanggal Merah Mingguan (Hanya muncul jika ada libur) */}
+                  {weekHolidays.length > 0 && (
+                    <div className="bg-red-50/40 border-b border-slate-100 px-4 py-2 flex flex-wrap gap-x-4 gap-y-1">
+                      <div className="flex items-center gap-1.5 text-red-600">
+                        <Info size={12} className="shrink-0" />
+                        <span className="text-[10px] font-black uppercase tracking-wider">Keterangan:</span>
                       </div>
+                      {weekHolidays.map((h, hIdx) => (
+                        <div key={hIdx} className="flex items-center gap-1.5">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${h.type === 'nasional' ? 'bg-red-500 text-white' : 'bg-rose-100 text-rose-600'}`}>
+                            Tgl {h.date}
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-700">{h.name}</span>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </div>
+                </React.Fragment>
               );
             })}
           </div>
         </div>
 
-        {/* Info Aturan */}
-        <div className="grid md:grid-cols-3 gap-4 pt-2">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-sm text-slate-800 mb-2 flex items-center gap-2 italic"><RefreshCw size={16} className="text-emerald-500"/> Libur Bergilir</h3>
-            <p className="text-xs text-slate-600">Jadwal libur bergeser +1 hari setiap minggu agar semua merasakan libur Minggu secara adil.</p>
-          </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-sm text-slate-800 mb-2 flex items-center gap-2 italic"><Lock size={16} className="text-blue-500"/> Konsistensi 6 Hari</h3>
-            <p className="text-xs text-slate-600">Shift dikunci selama 6 hari kerja berturut-turut dan hanya berganti setelah melewati hari libur.</p>
-          </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-sm text-slate-800 mb-2 flex items-center gap-2 italic"><ShieldCheck size={16} className="text-purple-500"/> Full Coverage</h3>
-            <p className="text-xs text-slate-600">Menjamin shift Pagi, Siang, dan Malam selalu terisi minimal 1 orang setiap hari tanpa kekosongan.</p>
-          </div>
+        {/* Footer Info */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-6 md:items-center justify-between">
+           <div className="space-y-1">
+             <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+               <ShieldCheck size={18} className="text-emerald-500" /> Jaminan Operasional
+             </h3>
+             <p className="text-xs text-slate-600 italic">"Shift Pagi, Siang, dan Malam tetap terisi 100% setiap hari, termasuk hari libur nasional."</p>
+           </div>
+           <div className="flex gap-4">
+             <div className="flex items-center gap-2">
+               <div className="w-3 h-3 bg-red-500 rounded-sm"></div>
+               <span className="text-[10px] font-bold uppercase text-slate-500">Nasional</span>
+             </div>
+             <div className="flex items-center gap-2">
+               <div className="w-3 h-3 bg-rose-100 rounded-sm"></div>
+               <span className="text-[10px] font-bold uppercase text-slate-500">Cuti Bersama</span>
+             </div>
+           </div>
         </div>
       </div>
     </div>
